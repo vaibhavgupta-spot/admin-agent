@@ -1,5 +1,5 @@
 {
-  "name": "weather-agent",
+  "name": "admin-agent",
   "version": "1.0.0",
   "main": "index.js",
   "private": true,
@@ -10,7 +10,7 @@
   "keywords": [],
   "author": "",
   "license": "Apache-2.0",
-  "description": "One Agent, one Workflow and one Tool to bring you the weather in your city.",
+  "description": "Admin agent to manage queries via Nutella API",
   "type": "module",
   "dependencies": {
     "@ai-sdk/openai": "^1.3.24",
