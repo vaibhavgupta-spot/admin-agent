@@ -36,9 +36,43 @@ export const usersTool = createTool({
   },
 });
 
+export const domainsTool = createTool({
+  id: 'get-domains',
+  description: 'Fetch domain configuration from Nutella API',
+  inputSchema: z.object({
+    cookies: z.record(z.string()).optional().describe('Cookies to send to Nutella (name->value)'),
+    authToken: z.string().optional().describe('Optional Basic auth token to use in Authorization header')
+  }),
+  outputSchema: z.unknown(),
+  execute: async (params: any) => {
+    // Support multiple invocation shapes:
+    // - execute({ context: { ... } })
+    // - execute({ inputData: { ... }, runtimeContext })
+    // - execute(inputData)
+    const ctx = params?.context ?? params?.inputData ?? params ?? {};
+    const cookies = ctx.cookies ?? {};
+    const authToken = ctx.authToken;
+
+    // Use the specific API host required by Nutella/Highspot
+    let client;
+    const apiHost = process.env.NUTELLA_API_HOST ?? 'https://api.highspot.com/v1.0';
+    if (authToken) {
+      // NutellaClient(apiHost, authToken?, cookies?)
+      client = new NutellaClient(apiHost, authToken, cookies ?? {});
+    } else {
+      client = new NutellaClient(apiHost, undefined, cookies ?? {});
+    }
+
+    // For domains, we'll use a hypothetical domains endpoint
+    // This would need to be implemented in NutellaClient if it doesn't exist
+    const domains = await client.getDomains();
+    return domains;
+  },
+});
+
 export const aiTool = createTool({
-  id: 'ai-client',
-  description: 'Call configured AI proxy/OpenAI with optional JSON context',
+  id: 'ai-tool',
+  description: 'Call configured AI proxy/OpenAI with optional JSON context and entity information',
   inputSchema: z.object({
     apiUrl: z.string().optional().describe('Optional proxied API url; falls back to env AI_PROXY_URL'),
     token: z.string().optional().describe('Optional proxy token; falls back to env AI_PROXY_TOKEN'),
@@ -49,6 +83,10 @@ export const aiTool = createTool({
     model: z.string().optional(),
     temperature: z.number().optional(),
     n: z.number().optional(),
+    // Additional fields for entity-specific processing
+    entityType: z.enum(['users', 'domains']).optional().describe('Type of entity being processed'),
+    entityData: z.unknown().optional().describe('Entity data being analyzed'),
+    originalQuery: z.string().optional().describe('Original user query'),
   }),
   outputSchema: z.unknown(),
   execute: async (params: any) => {
@@ -58,6 +96,11 @@ export const aiTool = createTool({
     const model = ctx.model ?? process.env.OPENAI_MODEL;
     const temperature = ctx.temperature ?? 0.2;
     const n = ctx.n ?? 1;
+
+    // Extract entity-specific parameters
+    const entityType = ctx.entityType;
+    const entityData = ctx.entityData;
+    const originalQuery = ctx.originalQuery;
 
     // Build messages: if caller provided explicit messages, use them; otherwise use prompt
     let messages: ChatMessage[] = [];
@@ -79,6 +122,11 @@ export const aiTool = createTool({
       }
     } else if (ctx.jsonContent) {
       messages = [{ role: 'system', content: `Context (JSON):\n${String(ctx.jsonContent)}` }, ...messages];
+    }
+
+    // Log entity information for debugging/monitoring if provided
+    if (entityType && entityData && originalQuery) {
+      console.log(`AI Tool called with entity type: ${entityType}, query: "${originalQuery}"`);
     }
 
     const client = new AIClient(apiUrl, token);
